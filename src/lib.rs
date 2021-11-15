@@ -3,9 +3,19 @@
 #[macro_use]
 extern crate napi_derive;
 
-use std::convert::TryInto;
+use image::codecs::png::PngEncoder;
+use image::{ColorType, GenericImageView};
+use napi::{bindgen_prelude::*, CallContext, Env, JsNull, JsNumber, JsString};
+use napi_derive::napi;
 
-use napi::{CallContext, Env, JsNumber, JsObject, Result, Task};
+use fast_image_resize::{
+  DifferentTypesOfPixelsError, Image, ImageRowsMut, ImageView, ImageViewMut, MulDiv, PixelType,
+  ResizeAlg, Resizer,
+};
+
+use image::io::Reader as ImageReader;
+use std::io::{self, BufWriter};
+use std::{num::NonZeroU32, result};
 
 #[cfg(all(
   any(windows, unix),
@@ -16,43 +26,69 @@ use napi::{CallContext, Env, JsNumber, JsObject, Result, Task};
 #[global_allocator]
 static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-struct AsyncTask(u32);
+fn _resize(
+  input: ImageView,
+  mut output: ImageViewMut,
+  algorithm: ResizeAlg,
+) -> result::Result<(), DifferentTypesOfPixelsError> {
+  let mut resizer = Resizer::new(algorithm);
 
-impl Task for AsyncTask {
-  type Output = u32;
-  type JsValue = JsNumber;
-
-  fn compute(&mut self) -> Result<Self::Output> {
-    use std::thread::sleep;
-    use std::time::Duration;
-    sleep(Duration::from_millis(self.0 as u64));
-    Ok(self.0 * 2)
-  }
-
-  fn resolve(&mut self, env: Env, output: Self::Output) -> Result<Self::JsValue> {
-    env.create_uint32(output)
-  }
+  resizer.resize(&input, &mut output)
 }
 
-#[module_exports]
-fn init(mut exports: JsObject) -> Result<()> {
-  exports.create_named_method("sync", sync_fn)?;
+#[napi]
+pub fn resize(input: Buffer, output_width: u32, output_height: u32) -> Result<Buffer> {
+  assert!(output_width > 0);
+  assert!(output_height > 0);
 
-  exports.create_named_method("sleep", sleep)?;
-  Ok(())
-}
+  let input: ImageReader<io::Cursor<&[u8]>> =
+    ImageReader::new(io::Cursor::new(<&[u8]>::from(&input)))
+      .with_guessed_format()
+      .unwrap();
+  let input_image = input.decode().unwrap();
 
-#[js_function(1)]
-fn sync_fn(ctx: CallContext) -> Result<JsNumber> {
-  let argument: u32 = ctx.get::<JsNumber>(0)?.try_into()?;
+  let mut input_image = Image::from_vec_u8(
+    NonZeroU32::new(input_image.width()).unwrap(),
+    NonZeroU32::new(input_image.height()).unwrap(),
+    input_image.to_rgba8().into_raw(),
+    PixelType::U8x4,
+  )
+  .unwrap();
 
-  ctx.env.create_uint32(argument + 100)
-}
+  // Create MulDiv instance
+  let alpha_mul_div: MulDiv = Default::default();
+  // Multiple RGB channels of source image by alpha channel
+  alpha_mul_div
+    .multiply_alpha_inplace(&mut input_image.view_mut())
+    .unwrap();
 
-#[js_function(1)]
-fn sleep(ctx: CallContext) -> Result<JsObject> {
-  let argument: u32 = ctx.get::<JsNumber>(0)?.try_into()?;
-  let task = AsyncTask(argument);
-  let async_task = ctx.env.spawn(task)?;
-  Ok(async_task.promise_object())
+  let mut output_image = Image::new(
+    NonZeroU32::new(output_width).unwrap(),
+    NonZeroU32::new(output_height).unwrap(),
+    input_image.pixel_type(),
+  );
+
+  _resize(
+    input_image.view(),
+    output_image.view_mut(),
+    ResizeAlg::Nearest,
+  )
+  .unwrap();
+
+  // Divide RGB channels of destination image by alpha
+  alpha_mul_div
+    .divide_alpha_inplace(&mut output_image.view_mut())
+    .unwrap();
+
+  let mut result_buf = BufWriter::new(Vec::new());
+  PngEncoder::new(&mut result_buf)
+    .encode(
+      output_image.buffer(),
+      output_width,
+      output_height,
+      ColorType::Rgba8,
+    )
+    .unwrap();
+
+  Ok(result_buf.buffer().into())
 }

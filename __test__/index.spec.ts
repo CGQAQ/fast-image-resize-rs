@@ -1,14 +1,16 @@
 import test from 'ava'
 
-import { sleep, sync } from '../index'
+import { resize } from '../index'
 
-test('sync function from native code', (t) => {
-  const fixture = 42
-  t.is(sync(fixture), fixture + 100)
-})
+import * as  fs from "fs"
 
-test('sleep function from native code', async (t) => {
-  const timeToSleep = 200
-  const value = await sleep(timeToSleep)
-  t.is(value, timeToSleep * 2)
+test("resize", (t) => {
+
+  const xx = fs.readFileSync(__dirname + "/test.jpg")
+
+  const result = resize(xx, 1024, 768);
+
+  console.log(result.toString())
+
+  t.assert(true)
 })
