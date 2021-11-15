@@ -80,6 +80,7 @@ pub fn resize(input: Buffer, output_width: u32, output_height: u32) -> Result<Bu
     .divide_alpha_inplace(&mut output_image.view_mut())
     .unwrap();
 
+  println!("{}", output_image.buffer().len());
   let mut result_buf = BufWriter::new(Vec::new());
   PngEncoder::new(&mut result_buf)
     .encode(
