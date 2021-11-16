@@ -15,6 +15,7 @@ napi-derive = "2.0.0-alpha.3"
 
 fast_image_resize = "0.4"
 image = "0.23.14"
+png = "0.16.8"
 
 [target.'cfg(all(any(windows, unix), target_arch = "x86_64", not(target_env = "musl")))'.dependencies]
 mimalloc = {version = "0.1"}
