@@ -3,7 +3,7 @@
 #[macro_use]
 extern crate napi_derive;
 
-use image::GenericImageView;
+use image::{codecs, ColorType, GenericImageView, ImageFormat};
 use napi::{bindgen_prelude::*, CallContext, Env, JsNull, JsNumber, JsString};
 use napi_derive::napi;
 
@@ -13,7 +13,6 @@ use fast_image_resize::{
 };
 
 use image::io::Reader as ImageReader;
-use png::{ColorType, Encoder};
 use std::io::{self, BufWriter};
 use std::{num::NonZeroU32, result};
 
@@ -45,6 +44,9 @@ pub fn resize(input: Buffer, output_width: u32, output_height: u32) -> Result<Bu
     ImageReader::new(io::Cursor::new(<&[u8]>::from(&input)))
       .with_guessed_format()
       .unwrap();
+
+  let format = input.format().unwrap();
+
   let input_image = input.decode().unwrap();
 
   let input_image = Image::from_vec_u8(
@@ -58,7 +60,7 @@ pub fn resize(input: Buffer, output_width: u32, output_height: u32) -> Result<Bu
   let mut output_image = Image::new(
     NonZeroU32::new(output_width).unwrap(),
     NonZeroU32::new(output_height).unwrap(),
-    PixelType::U8x4,
+    input_image.pixel_type(),
   );
 
   _resize(
@@ -68,23 +70,121 @@ pub fn resize(input: Buffer, output_width: u32, output_height: u32) -> Result<Bu
     Default::default(),
   )
   .unwrap();
+  let mut result = BufWriter::new(Vec::new());
+  let ref mut result_buf = result;
+  match format {
+    ImageFormat::Png => codecs::png::PngEncoder::new(result_buf)
+      .encode(
+        output_image.buffer(),
+        output_image.width().into(),
+        output_image.height().into(),
+        ColorType::Rgba8,
+      )
+      .unwrap(),
+    ImageFormat::Jpeg => codecs::jpeg::JpegEncoder::new(result_buf)
+      .encode(
+        output_image.buffer(),
+        output_image.width().into(),
+        output_image.height().into(),
+        ColorType::Rgba8,
+      )
+      .unwrap(),
+    ImageFormat::Gif => codecs::gif::GifEncoder::new(result_buf)
+      .encode(
+        output_image.buffer(),
+        output_image.width().into(),
+        output_image.height().into(),
+        ColorType::Rgba8,
+      )
+      .unwrap(),
+    // ImageFormat::WebP => codecs::webp::WebpEncoder::new(&mut result_buf)
+    //   .encode(
+    //     output_image.buffer(),
+    //     output_image.width().into(),
+    //     output_image.height().into(),
+    //     ColorType::Rgba8,
+    //   )
+    //   .unwrap(),
+    ImageFormat::WebP => unimplemented!("ImageFormat not supported"),
+    ImageFormat::Pnm => codecs::pnm::PnmEncoder::new(result_buf)
+      .encode(
+        output_image.buffer(),
+        output_image.width().into(),
+        output_image.height().into(),
+        ColorType::Rgba8,
+      )
+      .unwrap(),
+    // ImageFormat::Tiff => codecs::tiff::TiffEncoder::new(result_buf)
+    //   .encode(
+    //     output_image.buffer(),
+    //     output_image.width().into(),
+    //     output_image.height().into(),
+    //     ColorType::Rgba8,
+    //   )
+    //   .unwrap(),
+    ImageFormat::Tiff => unimplemented!("ImageFormat not supported"),
+    ImageFormat::Tga => codecs::tga::TgaEncoder::new(result_buf)
+      .encode(
+        output_image.buffer(),
+        output_image.width().into(),
+        output_image.height().into(),
+        ColorType::Rgba8,
+      )
+      .unwrap(),
+    // ImageFormat::Dds => codecs::dds::DdsEncoder::new(result_buf)
+    //   .encode(
+    //     output_image.buffer(),
+    //     output_image.width().into(),
+    //     output_image.height().into(),
+    //     ColorType::Rgba8,
+    //   )
+    //   .unwrap(),
+    ImageFormat::Dds => unimplemented!("ImageFormat not supported"),
+    ImageFormat::Bmp => codecs::bmp::BmpEncoder::new(result_buf)
+      .encode(
+        output_image.buffer(),
+        output_image.width().into(),
+        output_image.height().into(),
+        ColorType::Rgba8,
+      )
+      .unwrap(),
+    ImageFormat::Ico => codecs::ico::IcoEncoder::new(result_buf)
+      .encode(
+        output_image.buffer(),
+        output_image.width().into(),
+        output_image.height().into(),
+        ColorType::Rgba8,
+      )
+      .unwrap(),
+    // ImageFormat::Hdr => codecs::hdr::HdrEncoder::new(result_buf)
+    //   .encode(
+    //     output_image.buffer(),
+    //     <u32>::from(output_image.width()) as usize,
+    //     <u32>::from(output_image.height()) as usize,
+    //   )
+    //   .unwrap(),
+    ImageFormat::Hdr => unimplemented!("ImageFormat not supported"),
+    ImageFormat::Farbfeld => {
+      codecs::farbfeld::FarbfeldEncoder::new(result_buf)
+        .encode(
+          output_image.buffer(),
+          output_image.width().into(),
+          output_image.height().into(),
+        )
+        .unwrap();
+    }
+    // ImageFormat::Avif => codecs::avif::AvifEncoder::new(result_buf)
+    //   .encode(
+    //     output_image.buffer(),
+    //     output_image.width().into(),
+    //     output_image.height().into(),
+    //   )
+    //   .unwrap(),
+    ImageFormat::Avif => unimplemented!("ImageFormat not supported"),
+    ImageFormat::__NonExhaustive(_) => {
+      panic!("Unsupported image format");
+    }
+  };
 
-  let mut result_buf = BufWriter::new(Vec::new());
-
-  let mut writer = Encoder::new(
-    &mut result_buf,
-    output_image.width().into(),
-    output_image.height().into(),
-  );
-  writer.set_color(ColorType::RGBA);
-  writer.set_depth(png::BitDepth::Eight);
-  let mut writer = writer.write_header().unwrap();
-
-  writer
-    .write_image_data(output_image.buffer().into())
-    .unwrap();
-
-  drop(writer);
-
-  Ok(result_buf.into_inner().unwrap().into())
+  Ok(result.into_inner().unwrap().into())
 }

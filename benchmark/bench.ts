@@ -10,11 +10,11 @@ import {resize} from '../index'
 const xx = fs.readFileSync(path.join(__dirname, "./pexels-martin-damboldt-814499.jpg"));
 
 function benchResize() {
-    resize(xx, 192000, 10800);
+    resize(xx, 1920, 1080);
 }
 
 async function benchSharp() {
-    return sharp(xx).resize(192000, 10800).png().toBuffer();
+    return sharp(xx).resize(1920, 1080).toBuffer();
 }
 
 
