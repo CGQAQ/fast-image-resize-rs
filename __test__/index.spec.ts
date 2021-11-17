@@ -2,7 +2,7 @@ import test from 'ava'
 
 import { resize } from '../index'
 
-import * as  fs from "fs"
+import * as fs from 'fs'
 
 test("resize", (t) => {
 
@@ -10,7 +10,5 @@ test("resize", (t) => {
 
   const result = resize(xx, 1024, 768);
 
-  console.log(result.toString())
-
-  t.assert(true)
+  t.assert(result.length > 0);
 })

@@ -3,16 +3,19 @@
 #[macro_use]
 extern crate napi_derive;
 
-use image::{ GenericImageView};
+use image::GenericImageView;
 use napi::{bindgen_prelude::*, CallContext, Env, JsNull, JsNumber, JsString};
 use napi_derive::napi;
 
-use fast_image_resize::{DifferentTypesOfPixelsError, FilterType, Image, ImageRowsMut, ImageView, ImageViewMut, MulDiv, PixelType, ResizeAlg, Resizer};
+use fast_image_resize::{
+  DifferentTypesOfPixelsError, FilterType, Image, ImageRowsMut, ImageView, ImageViewMut, MulDiv,
+  PixelType, ResizeAlg, Resizer,
+};
 
 use image::io::Reader as ImageReader;
+use png::{ColorType, Encoder};
 use std::io::{self, BufWriter};
 use std::{num::NonZeroU32, result};
-use png::{Encoder, ColorType};
 
 #[cfg(all(
   any(windows, unix),
@@ -44,8 +47,6 @@ pub fn resize(input: Buffer, output_width: u32, output_height: u32) -> Result<Bu
       .unwrap();
   let input_image = input.decode().unwrap();
 
-  println!("x{}y{}x2{}y2{}", input_image.width(), input_image.height(), output_width, output_height);
-
   let input_image = Image::from_vec_u8(
     NonZeroU32::new(input_image.width()).unwrap(),
     NonZeroU32::new(input_image.height()).unwrap(),
@@ -60,28 +61,30 @@ pub fn resize(input: Buffer, output_width: u32, output_height: u32) -> Result<Bu
     PixelType::U8x4,
   );
 
-  println!("before: {}   {}   {:?}", output_image.buffer().len(), input_image.buffer().len(), input_image.pixel_type());
   _resize(
     &input_image.view(),
     &mut output_image.view_mut(),
-    ResizeAlg::Convolution(FilterType::Bilinear),
+    // ResizeAlg::Convolution(FilterType::Bilinear),
+    Default::default(),
   )
   .unwrap();
 
-  println!("{}", output_image.buffer().len());
   let mut result_buf = BufWriter::new(Vec::new());
-  println!("after111: {}", result_buf.buffer().len());
 
-  let mut writer = Encoder::new(&mut result_buf, output_width, output_height);
+  let mut writer = Encoder::new(
+    &mut result_buf,
+    output_image.width().into(),
+    output_image.height().into(),
+  );
   writer.set_color(ColorType::RGBA);
   writer.set_depth(png::BitDepth::Eight);
   let mut writer = writer.write_header().unwrap();
 
-  writer.write_image_data(output_image.buffer().into()).unwrap();
+  writer
+    .write_image_data(output_image.buffer().into())
+    .unwrap();
 
   drop(writer);
 
-  println!("after: {}", result_buf.buffer().len());
-
-  Ok(result_buf.buffer().into())
+  Ok(result_buf.into_inner().unwrap().into())
 }
