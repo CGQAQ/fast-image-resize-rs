@@ -1,3 +1,3 @@
-# `@napi-rs/package-template-linux-x64-gnu`
+# `fast-image-resize-rs-linux-x64-gnu`
 
-This is the **x86_64-unknown-linux-gnu** binary for `@napi-rs/package-template`
+This is the **x86_64-unknown-linux-gnu** binary for `fast-image-resize-rs`

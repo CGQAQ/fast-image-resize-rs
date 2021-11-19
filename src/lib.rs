@@ -1,15 +1,10 @@
-#![deny(clippy::all)]
-
-#[macro_use]
-extern crate napi_derive;
-
-use image::{codecs, ColorType, GenericImageView, ImageFormat};
-use napi::{bindgen_prelude::*, CallContext, Env, JsNull, JsNumber, JsString};
+use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
+use image::{codecs, ColorType, GenericImageView, ImageFormat};
+
 use fast_image_resize::{
-  DifferentTypesOfPixelsError, FilterType, Image, ImageRowsMut, ImageView, ImageViewMut, MulDiv,
-  PixelType, ResizeAlg, Resizer,
+  DifferentTypesOfPixelsError, Image, ImageView, ImageViewMut, PixelType, ResizeAlg, Resizer,
 };
 
 use image::io::Reader as ImageReader;
@@ -17,14 +12,14 @@ use std::io::{self, BufWriter};
 use std::{num::NonZeroU32, result};
 
 #[cfg(all(
-  any(windows, unix),
-  target_arch = "x86_64",
-  not(target_env = "musl"),
-  not(debug_assertions)
+  not(debug_assertions),
+  not(all(target_os = "windows", target_arch = "aarch64")),
+  not(all(target_os = "linux", target_arch = "aarch64", target_env = "musl")),
 ))]
 #[global_allocator]
-static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+static ALLOC: mimalloc_rust::GlobalMiMalloc = mimalloc_rust::GlobalMiMalloc;
 
+#[inline]
 fn _resize(
   input: &ImageView,
   output: &mut ImageViewMut,
